@@ -1,0 +1,17 @@
+---
+# Root policy. Establishes the top-level structure only, actual identities and
+# secrets live in the nested policies so they can be reloaded independently.
+#
+# Load order matters: root, then aws-credentials, then terraform-runner.
+
+- !policy
+  id: aws-credentials
+  annotations:
+    description: Credential material for the AWS lab account
+    owner: platform-security
+
+- !policy
+  id: terraform-runner
+  annotations:
+    description: Machine identity used by the Terraform pipeline
+    owner: platform-security

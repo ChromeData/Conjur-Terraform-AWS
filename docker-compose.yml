@@ -1,0 +1,55 @@
+---
+# Conjur OSS lab stack.
+# NOT production: single node, no TLS termination, dev-mode data key.
+services:
+  database:
+    image: postgres:15
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - conjur_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  conjur:
+    image: cyberark/conjur:1.24
+    command: server
+    environment:
+      DATABASE_URL: postgres://postgres@database/postgres
+      CONJUR_DATA_KEY: ${CONJUR_DATA_KEY:?run "make datakey" first}
+      CONJUR_AUTHENTICATORS: authn
+      CONJUR_ACCOUNT: lab
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    healthcheck:
+      # Root, not /health. Conjur's /health, /info and /authn all require
+      # authorization and answer 401 before you have a token, so a healthcheck
+      # against them never passes and every dependent container hangs on
+      # "dependency failed to start". Root answers 200 unauthenticated and is
+      # the only usable readiness probe here. Verified against conjur:1.24.
+      test: ["CMD-SHELL", "curl -fsS http://localhost/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  client:
+    image: cyberark/conjur-cli:8
+    entrypoint: sleep
+    command: infinity
+    environment:
+      CONJUR_APPLIANCE_URL: http://conjur
+      CONJUR_ACCOUNT: lab
+    volumes:
+      - ./conjur/policy:/policy:ro
+    depends_on:
+      conjur:
+        condition: service_healthy
+
+volumes:
+  conjur_db:

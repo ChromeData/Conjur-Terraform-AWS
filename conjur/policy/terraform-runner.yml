@@ -1,0 +1,34 @@
+---
+# Loaded into the terraform-runner policy branch:
+#   conjur policy load -b terraform-runner -f terraform-runner.yml
+#
+# The API key for this host is emitted exactly once, at load time. If you lose it,
+# you rotate, you do not recover it. That is the intended behaviour and it is
+# worth experiencing once in a lab rather than first in production.
+
+- !host
+  id: pipeline
+  annotations:
+    description: Terraform execution identity
+    authn/api-key: true
+
+- !layer
+  id: runners
+
+- !grant
+  role: !layer runners
+  member: !host pipeline
+
+# The authorisation that lets this host read the AWS credentials is NOT here.
+# It lives in grants.yml, loaded at root.
+#
+# Why: this file is loaded with `-b terraform-runner`, so every id in it resolves
+# relative to that branch. A `!permit` naming `aws-credentials/access-key-id`
+# resolves to terraform-runner/aws-credentials/access-key-id and the load fails:
+#
+#   422 Unprocessable Content. Variable 'terraform-runner/aws-credentials/
+#   access-key-id' not found in account 'lab'.
+#
+# Prefixing with a slash does not help either; Conjur rejects it outright with
+# "Illegal absolute id". A cross-branch grant has to be declared from a scope
+# that can see both branches, which means root. See grants.yml and LAB-NOTES.md.
