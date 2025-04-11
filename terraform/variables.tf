@@ -1,3 +1,30 @@
+variable "credential_source" {
+  description = <<-EOT
+    How the AWS provider gets its credentials.
+
+      summon      Conjur -> environment -> provider (via `summon`). Terraform
+                  never holds a value it could write to state. This is the
+                  correct pattern and the default.
+
+      datasource  Conjur -> conjur_secret data source -> provider. The
+                  intuitive approach, kept so the leak can be demonstrated
+                  rather than described. See `make prove-leak`.
+  EOT
+  type        = string
+  default     = "summon"
+
+  validation {
+    condition     = contains(["summon", "datasource"], var.credential_source)
+    error_message = "credential_source must be 'summon' or 'datasource'."
+  }
+}
+
+variable "region" {
+  description = "AWS region. Used on the summon path; the datasource path reads it from Conjur."
+  type        = string
+  default     = "us-east-1"
+}
+
 variable "name_prefix" {
   description = "Prefix for all resource names."
   type        = string
