@@ -1,106 +1,60 @@
-# Lab 01 — Conjur Secrets into a Terraform/AWS Pipeline
+# Lab 01: Conjur Secrets into a Terraform/AWS Pipeline
 
-**Terraform builds AWS infrastructure without an AWS credential ever touching
-disk, shell history, or state. The obvious way to do this doesn't work — and
-this lab proves that with a script instead of arguing about it.**
+[![tests](https://github.com/ChromeData/Conjur-Terraform-AWS/actions/workflows/tests.yml/badge.svg)](https://github.com/ChromeData/Conjur-Terraform-AWS/actions/workflows/tests.yml)
+
+**Terraform builds AWS infrastructure without an AWS key ever touching disk, shell history, or state. The obvious way to do this quietly fails, and this lab proves it with a script.**
 
 | | |
 |---|---|
-| **Domains** | CyberArk/Idira · AWS · Linux |
-| **Built on** | [cyberark/conjur](https://github.com/cyberark/conjur) (LGPL-3.0) · [terraform-provider-conjur](https://github.com/cyberark/terraform-provider-conjur) (Apache-2.0) · [summon](https://github.com/cyberark/summon) (MIT) |
-| **Cost** | < $1 (VPC + t3.micro) · **Runtime** ~4 hours |
-| **Status** | 🟡 Built, not yet run |
+| **Domains** | CyberArk/Idira, AWS, Linux |
+| **Built on** | [cyberark/conjur](https://github.com/cyberark/conjur), [terraform-provider-conjur](https://github.com/cyberark/terraform-provider-conjur), [summon](https://github.com/cyberark/summon) |
+| **Cost** | Under $1. **Runtime** ~4 hours |
+| **Status** | Built, not yet run |
 
----
+## Situation
 
-## The problem
+Standard Terraform on AWS leaks credentials in four places: the local AWS file, the shell environment, CI variables, and the one everyone forgets, the state file, in plain text. Most teams fix three and ship the fourth.
 
-Standard Terraform-on-AWS leaks credentials in four places: `~/.aws/credentials`,
-the shell environment, CI variables, and — the one everyone forgets —
-**the state file, in plaintext**. Most teams fix three and ship the fourth.
+## Task
 
-## The trap
+Pull the AWS credential from the Conjur vault and hand it to Terraform so that no copy of it lands on disk or in state.
 
-The obvious fix is the Conjur provider's `conjur_secret` data source. Pull the
-credential from the vault at plan time, hand it to the AWS provider, done.
+## Action
 
-**It writes the credential into `terraform.tfstate` in plaintext.**
+The obvious fix is the Conjur provider's secret data source. I wired that up, then found it writes the credential straight into `terraform.tfstate` in plain text. Terraform records every data source result so it can spot drift, and it does not treat secrets differently. So that approach just moves the credential from one plain text file to another.
 
-Terraform records *every* data source result in state — that's how it detects
-drift — and it doesn't special-case secrets. The value never appeared as an
-output. It was never a resource attribute. It's in state anyway.
+The real fix is Summon, CyberArk's own tool. It runs Terraform with the secret in the process environment. Terraform never holds a value it can write down.
 
-So the obvious approach moves your credential out of one plaintext file and into
-a different plaintext file, and it feels like a security improvement the whole
-time. That's what makes it worth demonstrating.
+I built both paths, made them switchable, and wrote a scanner that reads the state and looks for AWS credential material.
 
-## The fix
+## Result
 
-[Summon](https://github.com/cyberark/summon), CyberArk's own tool. It runs
-Terraform as a child process with the secrets in its environment
-([`summon/secrets.yml`](./summon/secrets.yml)). The AWS provider picks them up
-through the normal credential chain. Terraform never holds a value it knows
-about, so there's nothing for it to write down.
+`make prove-leak` builds it one way, scans, tears down, rebuilds the other way, scans again, and shows the difference. The data source path leaks. The Summon path does not. `terraform validate` passes and CI is green.
 
-## Proving it
+Building it caught a real dependency cycle that `terraform validate` flagged. It is in the history.
 
-Both paths are wired up and switchable
-([`terraform/credentials.tf`](./terraform/credentials.tf)):
+## What I did not build
 
-```bash
-make prove-leak
-```
+Conjur, its provider, and Summon are CyberArk's. The two paths, the scanner, the switch, and the infrastructure are mine.
 
-That builds it once with data sources, scans state, tears down, rebuilds with
-Summon, scans again, and diffs the two reports. One command, measurable result.
-
-[`scripts/verify-no-secrets-in-state.sh`](./scripts/verify-no-secrets-in-state.sh)
-does the scanning — three checks:
-
-1. **Access key IDs** by pattern (`AKIA`/`ASIA` + 16 chars).
-2. **The secret key** by exact match against the live Conjur value — 40
-   base64-ish characters matches far too much to catch by regex.
-3. **Every `conjur_secret` in state**, with a plaintext character count. This is
-   the check that explains the other two.
-
-## Why a VPC and a bastion
-
-Rather than an S3 bucket. The apply needs to run long enough to expose the
-access-token TTL question, which is the interesting failure mode: Conjur tokens
-are short-lived, and a long apply can outlive one.
-
-The bastion is IMDSv2-only with an encrypted root volume, and `operator_cidr`
-has **no default** with a validation rule rejecting `0.0.0.0/0` — a default
-there eventually becomes open-to-the-world in someone's fork, which is the exact
-class of mistake this lab is about.
-
-## What I didn't build
-
-Conjur, its Terraform provider, and Summon are CyberArk's. The credential-path
-comparison, the state-scanning check, the switchable configuration, and the
-infrastructure are mine.
-
----
-
-## Running it
+## Run it
 
 ```bash
 make up          # start Conjur
 make policy      # load policy
 make secrets     # store AWS credentials in the vault
 make apply       # provision via Summon
-make verify      # scan state — should pass
+make verify      # scan state, should pass
 make prove-leak  # the demonstration
-make clean       # tear it all down
+make clean       # tear down
 ```
 
-Needs Docker, Terraform ≥ 1.9, `summon` + `summon-conjur`, `jq`.
+Needs Docker, Terraform 1.9+, summon, jq.
 
 ## Findings
 
-`findings/` fills in on the first run. [LAB-NOTES.md](./LAB-NOTES.md) is the log.
+`findings/` fills in on the first run. [LAB-NOTES.md](./LAB-NOTES.md) is the running log.
 
 ## License
 
-Lab code: MIT ([LICENSE](./LICENSE)). Upstream tools keep their own licenses,
-credited above.
+Lab code: MIT ([LICENSE](./LICENSE)). Upstream tools keep their own licenses, credited above.
