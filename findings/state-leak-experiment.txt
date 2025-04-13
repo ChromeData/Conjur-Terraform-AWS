@@ -1,0 +1,45 @@
+State leak experiment
+Run: 2026-08-12 01:22:45
+Conjur: cyberark/conjur:1.24 (local docker compose)
+Terraform: Terraform v1.9.8
+Provider: cyberark/conjur
+==================================================================
+
+QUESTION
+  Does the conjur_secret data source persist the retrieved value into
+  terraform.tfstate?
+
+METHOD
+  Minimal config: three conjur_secret data sources and one terraform_data
+  resource. No AWS provider. No resource references the secrets. Anything
+  that lands in state therefore came from the data source itself.
+
+  Values stored in Conjur are AWS's published example credentials, not
+  live keys.
+
+RESULT
+  occurrences of the access key id in terraform.tfstate: 1
+  occurrences of the secret access key in terraform.tfstate: 1
+
+  data source entries recorded in state:
+    conjur_secret.access_key_id  value stored: true  length: 20
+    conjur_secret.region  value stored: true  length: 9
+    conjur_secret.secret_access_key  value stored: true  length: 40
+
+  raw excerpt, secret redacted:
+{
+  "name": "aws-credentials/secret-access-key",
+  "value": "<REDACTED 40-char secret was here in plaintext>",
+  "version": null
+}
+
+CONCLUSION
+  Confirmed. The credential is written to terraform.tfstate in plaintext.
+  It was never an output and never a resource attribute. Terraform records
+  every data source result so it can detect drift, and it does not treat
+  secrets differently.
+
+  So the intuitive Conjur-to-Terraform wiring moves the credential from
+  ~/.aws/credentials into terraform.tfstate. Both are plaintext files.
+  The Summon path in this lab avoids it because Terraform never receives
+  a value it could record.

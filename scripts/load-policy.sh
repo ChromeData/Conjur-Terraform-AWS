@@ -40,6 +40,10 @@ ${COMPOSE} exec -T client conjur policy load -b aws-credentials -f /policy/aws-c
 echo "==> Loading terraform-runner policy (this emits the host API key)"
 LOAD_OUTPUT="$(${COMPOSE} exec -T client conjur policy load -b terraform-runner -f /policy/terraform-runner.yml)"
 
+# Loaded at root, and last, because it grants across two branches. See grants.yml.
+echo "==> Loading cross-branch grants"
+${COMPOSE} exec -T client conjur policy load -b root -f /policy/grants.yml >/dev/null
+
 RUNNER_API_KEY="$(echo "${LOAD_OUTPUT}" | jq -r '.created_roles | to_entries[0].value.api_key // empty')"
 
 if [[ -z "${RUNNER_API_KEY}" ]]; then

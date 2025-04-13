@@ -28,3 +28,10 @@ reports/*.xml
 *.swp
 .idea/
 .vscode/
+
+# local run artifacts
+.env
+.conjur-admin-key
+.conjur-runner-key
+experiments/**/terraform.tfstate*
+experiments/**/.terraform/
