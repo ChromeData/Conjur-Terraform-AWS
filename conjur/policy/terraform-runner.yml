@@ -3,7 +3,7 @@
 #   conjur policy load -b terraform-runner -f terraform-runner.yml
 #
 # The API key for this host is emitted exactly once, at load time. If you lose it,
-# you rotate — you do not recover it. That is the intended behaviour and it is
+# you rotate, you do not recover it. That is the intended behaviour and it is
 # worth experiencing once in a lab rather than first in production.
 
 - !host

@@ -14,7 +14,7 @@ terraform {
 }
 
 # Authenticates as the host identity created by conjur/policy/terraform-runner.yml.
-# Credentials for Conjur ITSELF come from the environment — this is the one
+# Credentials for Conjur ITSELF come from the environment, this is the one
 # bootstrap secret you cannot eliminate, only reduce. Chain of trust has to start
 # somewhere; the honest version of this pattern names that rather than pretending
 # it is turtles all the way down.

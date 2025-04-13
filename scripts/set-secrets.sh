@@ -18,7 +18,7 @@ COMPOSE="docker compose"
 : "${AWS_REGION:=us-east-1}"
 
 # Sanity check: refuse to store a key that belongs to an account with too much
-# power. This is a lab guardrail, not a security control — but getting in the
+# power. This is a lab guardrail, not a security control, but getting in the
 # habit of asserting scope before storing a credential is the right instinct.
 echo "==> Verifying the key is scoped to a lab user"
 CALLER_ARN="$(AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}" \

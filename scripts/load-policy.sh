@@ -2,7 +2,7 @@
 # Load the Conjur policy tree in dependency order and capture the runner API key.
 #
 # The API key is returned exactly once, in the JSON response to the policy load
-# that creates the host. There is no endpoint to retrieve it again — if you lose
+# that creates the host. There is no endpoint to retrieve it again, if you lose
 # it you rotate the host. This script writes it to .conjur-runner-key and tells
 # you loudly, because discovering that behaviour by accident is a bad afternoon.
 
@@ -18,12 +18,12 @@ if [[ ! -f "${ADMIN_KEY_FILE}" ]]; then
 fi
 
 # conjurctl prints a block of text; the API key is the last field on the line
-# that mentions it. Parsing this is fragile by nature — pin the image tag.
+# that mentions it. Parsing this is fragile by nature, pin the image tag.
 ADMIN_API_KEY="$(grep -oE 'API key for admin: .*' "${ADMIN_KEY_FILE}" | awk '{print $NF}')"
 
 if [[ -z "${ADMIN_API_KEY}" ]]; then
   echo "error: could not parse admin API key from ${ADMIN_KEY_FILE}" >&2
-  echo "       inspect the file manually — the conjurctl output format may have changed" >&2
+  echo "       inspect the file manually, the conjurctl output format may have changed" >&2
   exit 1
 fi
 
