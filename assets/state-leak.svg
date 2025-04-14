@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="670" height="426" viewBox="0 0 670 426" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
+<rect width="670" height="426" rx="8" fill="#0d1117" stroke="#30363d"/>
+<rect width="670" height="34" rx="8" fill="#161b22"/>
+<rect y="26" width="670" height="8" fill="#161b22"/>
+<circle cx="18" cy="17" r="5" fill="#ff5f56"/>
+<circle cx="36" cy="17" r="5" fill="#ffbd2e"/>
+<circle cx="54" cy="17" r="5" fill="#27c93f"/>
+<text x="72" y="22" fill="#8b949e">credentials land in tfstate in plaintext, measured</text>
+<text x="16" y="54" fill="#8b949e" xml:space="preserve"># minimal Terraform: three Conjur data sources, no AWS provider, nothing</text>
+<text x="16" y="74" fill="#8b949e" xml:space="preserve"># downstream references the secrets. ran it, then inspected the state file.</text>
+<text x="16" y="114" fill="#c9d1d9" xml:space="preserve">occurrences of the access key id in terraform.tfstate:     1</text>
+<text x="16" y="134" fill="#c9d1d9" xml:space="preserve">occurrences of the secret access key in terraform.tfstate: 1</text>
+<text x="16" y="174" fill="#c9d1d9" xml:space="preserve">data source entries recorded in state:</text>
+<text x="16" y="194" fill="#c9d1d9" xml:space="preserve">  conjur_secret.access_key_id      value stored: true  length: 20</text>
+<text x="16" y="214" fill="#c9d1d9" xml:space="preserve">  conjur_secret.secret_access_key  value stored: true  length: 40</text>
+<text x="16" y="254" fill="#c9d1d9" xml:space="preserve">raw excerpt, secret redacted:</text>
+<text x="16" y="274" fill="#c9d1d9" xml:space="preserve">  { &quot;name&quot;: &quot;aws-credentials/secret-access-key&quot;,</text>
+<text x="16" y="294" fill="#c9d1d9" xml:space="preserve">    &quot;value&quot;: &quot;&lt;REDACTED 40-char secret was here in plaintext&gt;&quot; }</text>
+<text x="16" y="334" fill="#8b949e" xml:space="preserve"># confirmed: the credential is written to terraform.tfstate in plaintext.</text>
+<text x="16" y="354" fill="#8b949e" xml:space="preserve"># never an output, never a resource attribute — Terraform records every data</text>
+<text x="16" y="374" fill="#8b949e" xml:space="preserve"># source result to detect drift, and does not treat secrets differently.</text>
+<text x="16" y="394" fill="#8b949e" xml:space="preserve"># (credentials stored were AWS&#x27;s published example keys, not live.)</text>
+</svg>

@@ -1,5 +1,8 @@
 # Lab 01: Conjur Secrets into a Terraform/AWS Pipeline
 
+<p align="center"><img src="assets/state-leak.svg" alt="Credentials land in terraform.tfstate in plaintext, measured" width="720"></p>
+
+
 [![tests](https://github.com/ChromeData/Conjur-Terraform-AWS/actions/workflows/tests.yml/badge.svg)](https://github.com/ChromeData/Conjur-Terraform-AWS/actions/workflows/tests.yml)
 
 **Terraform builds AWS infrastructure without an AWS key ever touching disk, shell history, or state. The obvious way to do this quietly fails, and this lab proves it with a script.**
