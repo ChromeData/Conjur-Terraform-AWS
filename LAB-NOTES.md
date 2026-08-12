@@ -1,70 +1,86 @@
-# Lab Notes — Conjur + Terraform + AWS
+# Lab Notes — 01 Conjur → Terraform → AWS
 
-> Running log, newest first. Write entries as you hit them.
-
----
-
-## Known traps (pre-seeded — confirm or delete once you hit them)
-
-These are the failure modes this lab is designed to surface. Replace each with
-what actually happened on your run, including the real error text.
-
-### Stale Postgres volume after `docker compose down`
-
-Without `-v`, the Conjur database survives. `conjurctl account create lab` then
-fails against a database initialised with a different `CONJUR_DATA_KEY`, and the
-error does not obviously point at the volume. `make destroy` uses `-v` for
-exactly this reason.
-
-### The runner API key is emitted once
-
-Policy load returns `created_roles` with the API key. Reload the same policy and
-Conjur treats it as idempotent — no new key, no warning that you just lost it.
-Recovery is rotation, not retrieval:
-
-```bash
-docker compose exec client conjur host rotate-api-key -i terraform-runner/pipeline
-```
-
-### Access token TTL vs. long applies
-
-Conjur access tokens default to roughly 8 minutes. Worth measuring: does a
-`terraform apply` that runs longer than the TTL fail, or does the provider
-re-authenticate transparently? Test it by adding an artificial delay
-(`time_sleep` resource) and record the result — this is the finding most worth
-publishing, because the docs do not answer it.
-
-### `sensitive = true` is not encryption
-
-If you expose a Conjur value as an output — even marked sensitive — it is written
-to state in plaintext. Try it deliberately once, run `make verify`, watch it fail,
-then remove it. A demonstrated failure is better evidence than a passing test.
+Running log. Errors, dead ends, fixes, surprises. Dated, newest at the bottom.
 
 ---
 
-## YYYY-MM-DD — <first real entry goes here>
-
-**Goal:**
-
-**What happened:**
+## Format
 
 ```
-```
+### YYYY-MM-DD — what I was trying to do
 
-**Why:**
-
+**Expected:**
+**Got:**
+**Cause:**
 **Fix:**
+```
 
-**Time lost:**
+---
+
+## The finding this lab exists for
+
+The `conjur_secret` data source writes the retrieved value into
+`terraform.tfstate` in plaintext.
+
+This is not a bug in the provider. Terraform records every data source result in
+state so it can detect drift, and it has no concept of "this result is
+sensitive, don't persist it." Marking a variable `sensitive = true` only
+suppresses *console output* — it does not keep the value out of state.
+
+Consequence: the intuitive way to wire Conjur into Terraform moves the
+credential from `~/.aws/credentials` to `terraform.tfstate`. Both are plaintext
+files on disk. If state is in S3 without encryption, or in a repo, it is
+arguably worse.
+
+Summon avoids it because the secret only ever exists in the process environment.
+Terraform receives no value it could record.
+
+**Numbers to capture on the first run:** the exact character counts from
+`make prove-leak` on both paths. Put both report files in `findings/`.
+
+---
+
+## Known traps (confirm when running)
+
+### Conjur access-token TTL vs. a long apply
+
+Conjur tokens are short-lived (8 minutes by default). A VPC + EC2 apply can run
+longer than that. On the Summon path the credential is fetched once up front, so
+this does not bite. On the data source path, a token expiring mid-apply produces
+an auth error partway through — leaving half-built infrastructure. Worth
+triggering deliberately and recording.
+
+### `docker compose exec` in the verify script
+
+Assumes the `client` service is up. If Conjur is down, check 2 skips rather than
+fails, which could read as a pass. Confirm the SKIP path is obvious in output.
+
+### Destroy on the datasource path
+
+`make prove-leak` destroys with `-var credential_source=datasource` before
+switching. Terraform needs the data sources to still resolve at destroy time —
+if Conjur is down, destroy fails and leaves AWS resources running. Check the
+bill.
+
+### State file removal between paths
+
+`prove-leak` deletes `terraform.tfstate` between runs so the second scan is
+clean rather than carrying the first run's history. Confirm no `.backup` file
+survives with the old credential in it — that would be a false pass.
 
 ---
 
 ## Open questions
 
-- [ ] Does the provider re-authenticate mid-apply, or hold one token?
-- [ ] What is the blast radius if Conjur is unreachable during `terraform destroy`?
-- [ ] Is there a clean pattern for rotating `aws-credentials/*` without a re-plan?
+- [ ] Does `terraform.tfstate.backup` retain the leaked value after switching paths?
+- [ ] Exact TTL before a mid-apply token expiry on the datasource path?
+- [ ] Does the provider redact the value in `terraform show` output while still
+      storing it in the file? (If so, that makes the leak even easier to miss.)
+- [ ] Try short-lived STS credentials in Conjur instead of long-lived keys —
+      does that change the risk enough to make the datasource path acceptable?
 
-## What I would do differently
+---
 
-_Written at the end._
+## Log
+
+_(first entry goes here on the first real run)_

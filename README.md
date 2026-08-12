@@ -1,154 +1,106 @@
-# Lab 01 — Conjur Secrets Injection into a Terraform/AWS Pipeline
+# Lab 01 — Conjur Secrets into a Terraform/AWS Pipeline
 
-**Terraform provisions AWS infrastructure without any AWS credential ever touching
-disk, environment history, or state — it authenticates to Conjur as a machine
-identity and retrieves short-lived secrets at plan time.**
+**Terraform builds AWS infrastructure without an AWS credential ever touching
+disk, shell history, or state. The obvious way to do this doesn't work — and
+this lab proves that with a script instead of arguing about it.**
 
 | | |
 |---|---|
-| **Domains** | CyberArk/Idira · Linux · AWS |
-| **Built on** | [cyberark/conjur](https://github.com/cyberark/conjur) (LGPL-3.0) · [cyberark/terraform-provider-conjur](https://github.com/cyberark/terraform-provider-conjur) (Apache-2.0) |
-| **Runtime** | ~4 hours · < $1 in AWS spend (VPC + t3.micro) |
-| **Status** | 🟡 In progress |
+| **Domains** | CyberArk/Idira · AWS · Linux |
+| **Built on** | [cyberark/conjur](https://github.com/cyberark/conjur) (LGPL-3.0) · [terraform-provider-conjur](https://github.com/cyberark/terraform-provider-conjur) (Apache-2.0) · [summon](https://github.com/cyberark/summon) (MIT) |
+| **Cost** | < $1 (VPC + t3.micro) · **Runtime** ~4 hours |
+| **Status** | 🟡 Built, not yet run |
 
 ---
 
-## Why this lab exists
+## The problem
 
-The standard Terraform-on-AWS pattern leaks credentials in at least four places:
-`~/.aws/credentials`, the shell environment, CI variables, and — the one people
-forget — **the state file, in plaintext**. Every `aws_iam_access_key` resource
-writes its secret into `terraform.tfstate`. Most teams solve three of these four
-and quietly ship the fourth.
+Standard Terraform-on-AWS leaks credentials in four places: `~/.aws/credentials`,
+the shell environment, CI variables, and — the one everyone forgets —
+**the state file, in plaintext**. Most teams fix three and ship the fourth.
 
-Conjur's Terraform provider has 24 stars and no published end-to-end example.
-The docs cover authentication and the docs cover secret retrieval, but nobody has
-put the whole loop together against real AWS resources and written down where it
-falls apart. That gap is the lab.
+## The trap
 
-## What I built
+The obvious fix is the Conjur provider's `conjur_secret` data source. Pull the
+credential from the vault at plan time, hand it to the AWS provider, done.
 
-- A local Conjur OSS deployment (Docker Compose: Postgres + Conjur server) with
-  a real data key and an initialised `lab` account.
-- A **Conjur policy tree** modelling a realistic separation: a `terraform-runner`
-  host identity, an `aws-credentials` variable group, and a permission grant that
-  is deliberately least-privilege — the runner can `execute` the secrets it needs
-  and nothing else.
-- A **Terraform configuration** that reads AWS credentials from Conjur at plan
-  time via `data.conjur_secret`, provisions a VPC and a bastion, and never
-  materialises a credential in state.
-- A **bootstrap script** that loads policy, rotates the variable values, and emits
-  the host API key exactly once.
+**It writes the credential into `terraform.tfstate` in plaintext.**
 
-## What I did not build
+Terraform records *every* data source result in state — that's how it detects
+drift — and it doesn't special-case secrets. The value never appeared as an
+output. It was never a resource attribute. It's in state anyway.
 
-Conjur itself, the Terraform provider, and the Conjur Docker images are CyberArk's
-work. This lab is the policy model, the Terraform integration, the automation
-around them, and the analysis of where the pattern breaks.
+So the obvious approach moves your credential out of one plaintext file and into
+a different plaintext file, and it feels like a security improvement the whole
+time. That's what makes it worth demonstrating.
 
----
+## The fix
 
-## Architecture
+[Summon](https://github.com/cyberark/summon), CyberArk's own tool. It runs
+Terraform as a child process with the secrets in its environment
+([`summon/secrets.yml`](./summon/secrets.yml)). The AWS provider picks them up
+through the normal credential chain. Terraform never holds a value it knows
+about, so there's nothing for it to write down.
 
-```
-┌──────────────┐   1. authn (host identity + API key)
-│  Terraform   │ ─────────────────────────────────────►┌──────────────┐
-│   runner     │                                        │    Conjur    │
-│              │◄───────────────────────────────────── │   OSS 1.24   │
-└──────┬───────┘   2. short-lived access token          └──────┬───────┘
-       │                                                        │
-       │           3. data.conjur_secret.aws_*                  │
-       │◄───────────────────────────────────────────────────────┘
-       │
-       │           4. provider "aws" { access_key = <from step 3> }
-       ▼
-┌──────────────┐
-│     AWS      │  VPC · subnets · SG · bastion
-└──────────────┘
+## Proving it
+
+Both paths are wired up and switchable
+([`terraform/credentials.tf`](./terraform/credentials.tf)):
+
+```bash
+make prove-leak
 ```
 
-The critical property: step 3 returns a value that Terraform holds **in memory
-only**. It is marked sensitive and never written to state, because it is consumed
-as provider configuration rather than stored as a resource attribute.
+That builds it once with data sources, scans state, tears down, rebuilds with
+Summon, scans again, and diffs the two reports. One command, measurable result.
+
+[`scripts/verify-no-secrets-in-state.sh`](./scripts/verify-no-secrets-in-state.sh)
+does the scanning — three checks:
+
+1. **Access key IDs** by pattern (`AKIA`/`ASIA` + 16 chars).
+2. **The secret key** by exact match against the live Conjur value — 40
+   base64-ish characters matches far too much to catch by regex.
+3. **Every `conjur_secret` in state**, with a plaintext character count. This is
+   the check that explains the other two.
+
+## Why a VPC and a bastion
+
+Rather than an S3 bucket. The apply needs to run long enough to expose the
+access-token TTL question, which is the interesting failure mode: Conjur tokens
+are short-lived, and a long apply can outlive one.
+
+The bastion is IMDSv2-only with an encrypted root volume, and `operator_cidr`
+has **no default** with a validation rule rejecting `0.0.0.0/0` — a default
+there eventually becomes open-to-the-world in someone's fork, which is the exact
+class of mistake this lab is about.
+
+## What I didn't build
+
+Conjur, its Terraform provider, and Summon are CyberArk's. The credential-path
+comparison, the state-scanning check, the switchable configuration, and the
+infrastructure are mine.
 
 ---
 
 ## Running it
 
-### Prerequisites
-
 ```bash
-terraform  >= 1.9.0
-docker     >= 24.0    # with compose v2
-aws-cli    >= 2.15    # for verifying what actually got created
-jq         >= 1.7
+make up          # start Conjur
+make policy      # load policy
+make secrets     # store AWS credentials in the vault
+make apply       # provision via Summon
+make verify      # scan state — should pass
+make prove-leak  # the demonstration
+make clean       # tear it all down
 ```
 
-### Setup
-
-```bash
-make up            # brings up Conjur, initialises the lab account
-make policy        # loads conjur/policy/*.yml, prints the host API key ONCE
-make secrets       # populates aws-credentials/* — see note below
-make plan          # terraform plan, credentials pulled from Conjur
-make apply
-```
-
-`make secrets` expects real AWS keys for a **throwaway IAM user** scoped to the
-`terraform-lab` permission boundary. Create it first:
-
-```bash
-aws iam create-user --user-name conjur-lab-runner
-aws iam put-user-policy --user-name conjur-lab-runner \
-  --policy-name lab-boundary --policy-document file://docs/iam-boundary.json
-```
-
-### Teardown
-
-```bash
-make destroy       # terraform destroy, then docker compose down -v
-```
-
-> `-v` matters. Leaving the Conjur Postgres volume behind means the next `make up`
-> silently reuses the old data key and the account init fails in a way that is
-> genuinely confusing. See LAB-NOTES 2026-XX-XX.
-
----
-
-## Verifying the claim
-
-The whole point is "no credential in state." Prove it rather than asserting it:
-
-```bash
-make verify
-```
-
-Which runs:
-
-```bash
-# should return nothing
-terraform show -json | jq -r '.. | strings' | grep -E 'AKIA|aws_secret' || echo "PASS: no credentials in state"
-```
-
----
+Needs Docker, Terraform ≥ 1.9, `summon` + `summon-conjur`, `jq`.
 
 ## Findings
 
-Fill this in as you go. Suggested shape:
+`findings/` fills in on the first run. [LAB-NOTES.md](./LAB-NOTES.md) is the log.
 
-| Finding | Severity | Evidence |
-|---------|----------|----------|
-| | | |
+## License
 
-Questions worth answering here:
-- Does the Conjur access token TTL (default 8 min) survive a long `terraform apply`?
-- What happens to the pipeline when Conjur is unreachable mid-apply?
-- Does `terraform refresh` re-authenticate, or reuse a cached token?
-
-## What broke
-
-See [LAB-NOTES.md](./LAB-NOTES.md).
-
-## What I would do differently
-
-Written at the end.
+Lab code: MIT ([LICENSE](./LICENSE)). Upstream tools keep their own licenses,
+credited above.

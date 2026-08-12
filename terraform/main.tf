@@ -1,40 +1,6 @@
-# ---------------------------------------------------------------------------
-# Secret retrieval
-#
-# These are data sources, not resources. That distinction is the entire point:
-# a data source is read at plan time and its value is not persisted as managed
-# state. Terraform still records data source results in state, which is why the
-# values below are consumed directly by the provider block and never surfaced as
-# a resource attribute or output.
-#
-# Verify with `make verify` rather than trusting this comment.
-# ---------------------------------------------------------------------------
-
-data "conjur_secret" "aws_access_key_id" {
-  name = "aws-credentials/access-key-id"
-}
-
-data "conjur_secret" "aws_secret_access_key" {
-  name = "aws-credentials/secret-access-key"
-}
-
-data "conjur_secret" "aws_region" {
-  name = "aws-credentials/region"
-}
-
-provider "aws" {
-  region     = data.conjur_secret.aws_region.value
-  access_key = data.conjur_secret.aws_access_key_id.value
-  secret_key = data.conjur_secret.aws_secret_access_key.value
-
-  default_tags {
-    tags = {
-      Purpose   = "pam-cloud-lab"
-      Lab       = "01-conjur-terraform-aws"
-      ManagedBy = "terraform"
-    }
-  }
-}
+# Credential retrieval and the AWS provider live in credentials.tf — that file
+# is the actual subject of this lab. This one is just the infrastructure that
+# gives the apply something real to do.
 
 # ---------------------------------------------------------------------------
 # Minimal but non-trivial infrastructure.
