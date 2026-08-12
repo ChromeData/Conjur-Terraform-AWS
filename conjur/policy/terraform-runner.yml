@@ -1,0 +1,33 @@
+---
+# Loaded into the terraform-runner policy branch:
+#   conjur policy load -b terraform-runner -f terraform-runner.yml
+#
+# The API key for this host is emitted exactly once, at load time. If you lose it,
+# you rotate — you do not recover it. That is the intended behaviour and it is
+# worth experiencing once in a lab rather than first in production.
+
+- !host
+  id: pipeline
+  annotations:
+    description: Terraform execution identity
+    authn/api-key: true
+
+- !layer
+  id: runners
+
+- !grant
+  role: !layer runners
+  member: !host pipeline
+
+# The actual authorisation. Note `execute` and not `read`:
+#   read    -> can see that the variable exists, and its annotations
+#   execute -> can retrieve the value
+# Granting `read` without `execute` is a useful pattern for inventory tooling that
+# should enumerate secrets without being able to consume them.
+- !permit
+  role: !layer runners
+  privileges: [ execute ]
+  resources:
+    - !variable aws-credentials/access-key-id
+    - !variable aws-credentials/secret-access-key
+    - !variable aws-credentials/region
