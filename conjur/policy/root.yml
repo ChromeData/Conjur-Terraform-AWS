@@ -1,5 +1,5 @@
 ---
-# Root policy. Establishes the top-level structure only — actual identities and
+# Root policy. Establishes the top-level structure only, actual identities and
 # secrets live in the nested policies so they can be reloaded independently.
 #
 # Load order matters: root, then aws-credentials, then terraform-runner.

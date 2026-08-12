@@ -1,4 +1,4 @@
-# How the AWS provider gets its credentials — the whole point of this lab.
+# How the AWS provider gets its credentials, the whole point of this lab.
 #
 # Two paths, switchable, because the comparison IS the finding:
 #

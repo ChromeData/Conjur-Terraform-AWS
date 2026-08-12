@@ -1,4 +1,4 @@
-# Credential retrieval and the AWS provider live in credentials.tf — that file
+# Credential retrieval and the AWS provider live in credentials.tf, that file
 # is the actual subject of this lab. This one is just the infrastructure that
 # gives the apply something real to do.
 

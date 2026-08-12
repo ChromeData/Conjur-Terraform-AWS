@@ -40,7 +40,7 @@ variable "vpc_cidr" {
 variable "operator_cidr" {
   description = <<-EOT
     Your public IP in CIDR form, e.g. "203.0.113.4/32".
-    Deliberately has no default — a default here would eventually become 0.0.0.0/0
+    Deliberately has no default, a default here would eventually become 0.0.0.0/0
     in someone's copy of this repo, and that is exactly the class of mistake this
     lab is about.
   EOT
