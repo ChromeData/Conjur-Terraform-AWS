@@ -83,4 +83,39 @@ survives with the old credential in it — that would be a false pass.
 
 ## Log
 
-_(first entry goes here on the first real run)_
+### 2026-08-11 — reading the provider docs, before running anything
+
+The lab was originally written around the `conjur_secret` data source, with a comment
+in `main.tf` asserting the value "is not persisted as managed state."
+
+That comment was wrong, and I want to record why I believed it, because it's the whole
+point of this lab.
+
+The reasoning was: it's a data source, not a resource, and it's consumed directly by
+the provider block, never surfaced as an output or a resource attribute. All true. And
+none of it matters. Terraform records **every** data source result in state, because
+that's how it detects drift on the next plan. It has no concept of "this result is
+sensitive, don't write it down." Marking something `sensitive = true` suppresses
+*console output* only.
+
+So the intuitive Conjur-to-Terraform wiring takes the credential out of
+`~/.aws/credentials` and puts it in `terraform.tfstate`. Both are plaintext files on
+disk. If state lives in an unencrypted S3 bucket, or gets committed, it's arguably a
+downgrade — and it feels like a security improvement the entire time.
+
+**Restructured the lab around this.** Summon became the default path (secret lives in
+the process environment, Terraform never holds a value it could record), the data
+source became a switchable demo, and `verify-no-secrets-in-state.sh` became the thing
+that settles it by measurement instead of argument.
+
+**To confirm on the first run:** exact character counts from both paths, and whether
+`terraform.tfstate.backup` retains the leaked value after switching. A stale backup
+holding the credential would be a false pass.
+
+---
+
+### 2026-08-12 — validate + fmt in CI
+
+`terraform validate` passes on both credential paths. Added `fmt -check` to CI after
+`fmt` reformatted `rotation.tf` locally — if formatting drifts, I'd rather CI say so
+than discover it in a diff.
