@@ -63,7 +63,7 @@ Needs Docker, Terraform 1.9+, summon, jq.
 
 ## Findings
 
-`findings/` fills in on the first run. [LAB-NOTES.md](./LAB-NOTES.md) is the running log.
+[`findings/`](./findings/) holds the state-leak experiment: the measured proof that all three credentials land in `terraform.tfstate` in plaintext. [LAB-NOTES.md](./LAB-NOTES.md) is the running log.
 
 ## License
 
