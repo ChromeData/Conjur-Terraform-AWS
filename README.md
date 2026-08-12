@@ -9,7 +9,7 @@
 | **Domains** | CyberArk/Idira, AWS, Linux |
 | **Built on** | [cyberark/conjur](https://github.com/cyberark/conjur), [terraform-provider-conjur](https://github.com/cyberark/terraform-provider-conjur), [summon](https://github.com/cyberark/summon) |
 | **Cost** | Under $1. **Runtime** ~4 hours |
-| **Status** | Built, not yet run |
+| **Status** | Built and verified. terraform validate and fmt clean (output in findings/). Cloud run pending |
 
 ## Situation
 
