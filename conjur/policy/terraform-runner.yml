@@ -19,15 +19,16 @@
   role: !layer runners
   member: !host pipeline
 
-# The actual authorisation. Note `execute` and not `read`:
-#   read    -> can see that the variable exists, and its annotations
-#   execute -> can retrieve the value
-# Granting `read` without `execute` is a useful pattern for inventory tooling that
-# should enumerate secrets without being able to consume them.
-- !permit
-  role: !layer runners
-  privileges: [ execute ]
-  resources:
-    - !variable aws-credentials/access-key-id
-    - !variable aws-credentials/secret-access-key
-    - !variable aws-credentials/region
+# The authorisation that lets this host read the AWS credentials is NOT here.
+# It lives in grants.yml, loaded at root.
+#
+# Why: this file is loaded with `-b terraform-runner`, so every id in it resolves
+# relative to that branch. A `!permit` naming `aws-credentials/access-key-id`
+# resolves to terraform-runner/aws-credentials/access-key-id and the load fails:
+#
+#   422 Unprocessable Content. Variable 'terraform-runner/aws-credentials/
+#   access-key-id' not found in account 'lab'.
+#
+# Prefixing with a slash does not help either; Conjur rejects it outright with
+# "Illegal absolute id". A cross-branch grant has to be declared from a scope
+# that can see both branches, which means root. See grants.yml and LAB-NOTES.md.

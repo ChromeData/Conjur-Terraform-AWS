@@ -9,7 +9,7 @@
 | **Domains** | CyberArk/Idira, AWS, Linux |
 | **Built on** | [cyberark/conjur](https://github.com/cyberark/conjur), [terraform-provider-conjur](https://github.com/cyberark/terraform-provider-conjur), [summon](https://github.com/cyberark/summon) |
 | **Cost** | Under $1. **Runtime** ~4 hours |
-| **Status** | Built and verified. terraform validate and fmt clean (output in findings/). Cloud run pending |
+| **Status** | Run for real. Conjur stack up, policy loaded, state leak confirmed and measured (output in findings/). AWS provisioning still pending |
 
 ## Situation
 
@@ -29,9 +29,16 @@ I built both paths, made them switchable, and wrote a scanner that reads the sta
 
 ## Result
 
-`make prove-leak` builds it one way, scans, tears down, rebuilds the other way, scans again, and shows the difference. The data source path leaks. The Summon path does not. `terraform validate` passes and CI is green.
+**Confirmed by measurement, not argument.** I ran the stack against local Docker and applied a minimal config in [experiments/state-leak](./experiments/state-leak) with three Conjur data sources, no AWS provider, and nothing referencing the secrets. All three credentials landed in `terraform.tfstate` in plaintext, including the full 40 character secret key:
 
-Building it caught a real dependency cycle that `terraform validate` flagged. It is in the history.
+```
+conjur_secret.access_key_id      value stored: true  length: 20
+conjur_secret.secret_access_key  value stored: true  length: 40
+```
+
+Full output in [findings/state-leak-experiment.txt](./findings/state-leak-experiment.txt). Values used were AWS's published example credentials, not live keys.
+
+The run also exposed four real bugs: a healthcheck pointed at an authenticated endpoint that hung the whole stack, a missing account creation step, a cross branch Conjur grant that cannot be declared inside a branch policy, and Git Bash rewriting container paths on Windows. All four are fixed and written up in [LAB-NOTES.md](./LAB-NOTES.md).
 
 ## What I did not build
 

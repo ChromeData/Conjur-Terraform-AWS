@@ -28,7 +28,12 @@ services:
     ports:
       - "8080:80"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost/health || exit 1"]
+      # Root, not /health. Conjur's /health, /info and /authn all require
+      # authorization and answer 401 before you have a token, so a healthcheck
+      # against them never passes and every dependent container hangs on
+      # "dependency failed to start". Root answers 200 unauthenticated and is
+      # the only usable readiness probe here. Verified against conjur:1.24.
+      test: ["CMD-SHELL", "curl -fsS http://localhost/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12

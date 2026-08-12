@@ -1,0 +1,26 @@
+---
+# Cross-branch authorisation, loaded LAST and at root:
+#   conjur policy load -b root -f grants.yml
+#
+# This file exists because a grant that spans two policy branches cannot be
+# declared from inside either one. Loaded with `-b terraform-runner`, the ids
+# resolve relative to that branch and the variables are not found. Loaded at
+# root, both branches are addressable and the grant resolves.
+#
+# Keeping grants in their own file is also the better shape for review: the
+# question "who can read the AWS credentials" has exactly one answer, in one
+# place, instead of being distributed across every identity policy.
+
+# Note `execute` and not `read`:
+#   read    -> can see that the variable exists, and its annotations
+#   execute -> can retrieve the value
+#
+# Granting `read` without `execute` is a genuinely useful pattern for inventory
+# tooling that should enumerate secrets without being able to consume them.
+- !permit
+  role: !layer terraform-runner/runners
+  privileges: [ execute ]
+  resources:
+    - !variable aws-credentials/access-key-id
+    - !variable aws-credentials/secret-access-key
+    - !variable aws-credentials/region
